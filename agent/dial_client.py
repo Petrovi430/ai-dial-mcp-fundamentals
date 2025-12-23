@@ -5,15 +5,15 @@ from typing import Any
 from openai import AsyncAzureOpenAI
 
 from agent.models.message import Message, Role
-from agent.mcp_client import MCPClient
+from agent.mcp_client_manager import MCPClientManager
 
 
 class DialClient:
-    """Handles AI model interactions and integrates with MCP client"""
+    """Handles AI model interactions and integrates with MCP clients via MCPClientManager"""
 
-    def __init__(self, api_key: str, endpoint: str, tools: list[dict[str, Any]], mcp_client: MCPClient):
+    def __init__(self, api_key: str, endpoint: str, tools: list[dict[str, Any]], mcp_manager: MCPClientManager):
         self.tools = tools
-        self.mcp_client = mcp_client
+        self.mcp_manager = mcp_manager
         self.openai = AsyncAzureOpenAI(
             api_key=api_key,
             azure_endpoint=endpoint,
@@ -82,13 +82,13 @@ class DialClient:
         return ai_message
 
     async def _call_tools(self, ai_message: Message, messages: list[Message]):
-        """Execute tool calls using MCP client"""
+        """Execute tool calls using MCP client manager to route to correct MCP server"""
         for tool_call in ai_message.tool_calls:
             tool_name = tool_call["function"]["name"]
             tool_args = json.loads(tool_call["function"]["arguments"])
 
             try:
-                tool_result = await self.mcp_client.call_tool(tool_name, tool_args)
+                tool_result = await self.mcp_manager.call_tool(tool_name, tool_args)
                 messages.append(
                     Message(
                         role=Role.TOOL,

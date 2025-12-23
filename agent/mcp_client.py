@@ -1,4 +1,5 @@
 from typing import Optional, Any
+import asyncio
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
@@ -26,17 +27,50 @@ class MCPClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        try:
-            if self.session and self._session_context:
-                await self._session_context.__aexit__(exc_type, exc_val, exc_tb)
-        except Exception as e:
-            print(f"Error closing session: {e}")
-        finally:
+        await self.close()
+        # Return False to propagate any original exception
+        return False
+    
+    async def close(self):
+        """Safely close the MCP client connection with timeout"""
+        errors = []
+    
+        async def close_with_timeout(coro, name, timeout=5.0):
+            """Helper to close with timeout"""
             try:
-                if self._streams_context:
-                    await self._streams_context.__aexit__(exc_type, exc_val, exc_tb)
+                await asyncio.wait_for(coro, timeout=timeout)
+            except asyncio.TimeoutError:
+                errors.append(f"{name} close timeout after {timeout}s")
+            except asyncio.CancelledError:
+                # Suppress cancelled errors during cleanup
+                pass
             except Exception as e:
-                print(f"Error closing streams: {e}")
+                # Suppress common cleanup errors
+                error_str = str(e).lower()
+                if "cancel scope" not in error_str and "cancelled" not in error_str:
+                    errors.append(f"{name} close error: {e}")
+    
+        # Close session first
+        if self.session and self._session_context:
+            await close_with_timeout(
+                self._session_context.__aexit__(None, None, None),
+                "Session"
+            )
+            self.session = None
+            self._session_context = None
+    
+        # Then close streams
+        if self._streams_context:
+            await close_with_timeout(
+                self._streams_context.__aexit__(None, None, None),
+                "Streams"
+            )
+            self._streams_context = None
+    
+        # Print any errors but don't raise them during cleanup
+        if errors:
+            for error in errors:
+                print(f"⚠️  {error}")
 
     async def get_tools(self) -> list[dict[str, Any]]:
         """Get available tools from MCP server"""
