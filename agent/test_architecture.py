@@ -4,6 +4,11 @@ Tests the integration between Users Service and Web Fetch MCP servers
 """
 import asyncio
 import os
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agent.mcp_client_manager import MCPClientManager
 

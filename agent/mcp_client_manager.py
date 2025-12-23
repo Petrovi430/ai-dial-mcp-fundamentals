@@ -77,10 +77,21 @@ class MCPClientManager:
         return self.mcp_clients[client_name]
 
     async def close_all(self):
-        """Close all MCP client connections"""
-        for client_name, client in self.mcp_clients.items():
+        """Close all MCP client connections gracefully"""
+        errors = []
+    
+        for client_name, client in list(self.mcp_clients.items()):
             try:
                 await client.__aexit__(None, None, None)
                 print(f"✅ Closed connection to '{client_name}'")
             except Exception as e:
-                print(f"❌ Error closing '{client_name}': {e}")
+                error_msg = f"Error closing '{client_name}': {e}"
+                errors.append(error_msg)
+                print(f"⚠️  {error_msg}")
+    
+        # Clear the dictionaries after cleanup
+        self.mcp_clients.clear()
+        self.tool_to_client_map.clear()
+    
+        if errors:
+            print(f"⚠️  Cleanup completed with {len(errors)} error(s)")
